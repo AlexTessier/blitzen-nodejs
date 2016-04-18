@@ -1,0 +1,30 @@
+{
+  "name": "blitzen",
+  "version": "0.0.0",
+  "description": "Node.js interface for the Blitzen time series database.",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/mocha/bin/mocha test"
+  },
+  "author": "Josh Cameron",
+  "license": "ISC",
+  "dependencies": {
+    "node-oauth": "0.1.3",
+    "oauth": "0.9.14"
+  },
+  "devDependencies": {
+    "chai": "3.5.0",
+    "grunt": "1.0.1",
+    "grunt-mocha": "1.0.1",
+    "mocha": "2.4.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://git.autodesk.com/research-complex-systems/blitzen-nodejs.git"
+  },
+  "keywords": [
+    "blitzen",
+    "node",
+    "js"
+  ]
+}
