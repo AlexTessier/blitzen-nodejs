@@ -1,8 +1,54 @@
-var blitzen = require('./lib/blitzen-v1-simple');
+var blitzen = require('./blitzen');
+var fs = require('fs');
 
-var ORGANIZATION_ID = 'd58983a1fd3aa3e8bf4e1ae4a7b2';
-var GROUP_ID = '2b8084cd855fa749b7113eba1849';
-var PROJECT_ID = '2bbb4f6099676a77d70cfdc4254e';
+readEntitiesFromFile = function(
+	entitiesFilePath)
+{
+	try 
+	{
+		var data = fs.readFileSync(entitiesFilePath, 'utf8');
+		var entities = JSON.parse(data);
+
+
+		if (	entities.organization_id 
+			&& 	entities.group_id
+			&&	entities.project_id)
+		{
+			console.log('Successfully read entities.'); 
+			console.log("organization_id: " + entities.organization_id);
+			console.log("group_id: " + entities.group_id);
+			console.log("project_id: " + entities.project_id);
+		}
+		else
+		{
+			console.log('Error = > Invalid entities file format');
+			console.log('Aborting !');
+			process.exit(1);
+		}
+
+		return entities;
+	}
+	catch (e) 
+	{
+		if (e.code === 'ENOENT') 
+		{
+			console.log(
+				'Error => Entities file not found: ' 
+				+ entitiesFilePath);
+		} 
+		else 
+		{
+			console.log("Error reading entities file: " + e.message);
+		}
+
+		console.log('Aborting !');
+		process.exit(1);
+	}
+}
+
+
+var entitiesFilePath = '/Users/cameroj/.adsk-data360/entities-crucible.json';
+var entities = readEntitiesFromFile(entitiesFilePath);
 
 var credentialsFilePath = '/Users/cameroj/.adsk-data360/credentials-crucible.json'; 
 
@@ -15,9 +61,9 @@ database.connect()
 		//Add 2 data points with randomly selected values
 		var params = 
 		{
-			organizationId: ORGANIZATION_ID,
-			groupId: GROUP_ID,
-			projectId: PROJECT_ID,
+			organizationId: entities.organization_id,
+			groupId: entities.group_id,
+			projectId: entities.project_id,
 			readingList: 
 			[
 				{
@@ -43,9 +89,9 @@ database.connect()
 		//Add 2 data points with randomly selected values
 		var params = 
 		{
-			organizationId: ORGANIZATION_ID,
-			groupId: GROUP_ID,
-			projectId: PROJECT_ID,
+			organizationId: entities.organization_id,
+			groupId: entities.group_id,
+			projectId: entities.project_id,
 			readingList: 
 			[
 				{
@@ -75,9 +121,9 @@ database.connect()
 		//Query parameters to fetch data from Data 360
 		var params = 
 		{
-			organizationId: ORGANIZATION_ID,
-			groupId: GROUP_ID,
-			projectId: PROJECT_ID,
+			organizationId: entities.organization_id,
+			groupId: entities.group_id,
+			projectId: entities.project_id,
 			sensorList: 'exampleSensorId',
 			//startTS: '2016-04-27T08:02:49.586Z',
 			//endTS: '2016-04-27T08:02:55.586Z',
