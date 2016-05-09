@@ -1,177 +1,225 @@
-var OAuth = require("oauth").OAuth;
-var util = require('util');
+var errors = require('request-promise/errors');
+var httpRequest = require('request-promise');
+var Promise = require("bluebird");
+var fs = require('fs');
+var oxygen = require('./oxygen');
+var path = require('path');
 
-function Database()
+//TODO: Create this library as a npm module ? (TBD)
+
+const DEFAULT_API_URL = 'https://projectdasher-staging.api.autodesk.com';
+const V1_SIMPLE_READINGS_ENDPOINT = '/api/v1/projects/{projectId}/readings';
+
+function Database(
+	credentialsFilePath,
+	apiUrl)
 {
-	this.oauthBaseUrl = "https://accounts.autodesk.com/OAuth";
-	this.requestTokenUrl = this.oauthBaseUrl + "/RequestToken";
-	this.accessTokenUrl = this.oauthBaseUrl + "/AccessToken";
-	this.authorizeUrl = this.oauthBaseUrl + "/Authorize";
+	console.assert(
+		typeof(credentialsFilePath) != 'undefined',
+		{
+			'message': 'credentialsFilePath not specified'
+		});
+	console.assert(
+		typeof(credentialsFilePath) === 'string',
+		{
+			'message': 'credentialsFilePath is not a string',
+			'credentialsFilePath': credentialsFilePath
+		});
 
-	this.consumerKey = null;
-	this.consumerSecret = null;
-	this.oauth = null;
-	this.accessTokenKey = null;
-	this.accessTokenSecret = null;
+	if (typeof(apiUrl) === 'undefined') apiUrl = DEFAULT_API_URL;
+
+	console.assert(
+		typeof(apiUrl) === 'string',
+		{
+			'message': 'apiUrl is not a string',
+			'apiUrl': apiUrl
+		});
+
+	this.authenticator = new oxygen.Authenticator(credentialsFilePath);
+	this.apiUrl = DEFAULT_API_URL;
 }
 
-Database.prototype.login = function login(
-	consumerKey, 
-	consumerSecret)
+Database.prototype.readingsUrl = function()
 {
-	console.log("login");
-	console.log(this);
+	return (this.apiUrl + V1_SIMPLE_READINGS_ENDPOINT);
+}
 
-	this.oauth = new OAuth(
-		this.requestTokenUrl,
-		this.accessTokenUrl,
-		consumerKey,  
-		consumerSecret, 
-		"1.0", 
-		undefined, 
-		"HMAC-SHA1");       
+Database.prototype.connect = function()
+{
+	console.log('Database.connect() called');
 
-	var thisObj = this;
+	return this.authenticator.obtainAccessToken();
+}
 
-	this.oauth.getOAuthRequestToken(
-		function(error, requestTokenKey, requestTokenSecret, results)
+Database.prototype.request = function(
+	method, 
+	url,
+	params)
+{
+	console.log('\n' + method + ": " + url);
+	
+	var options = 
+	{
+		method: method,
+		url: url,
+		headers:
 		{
-			thisObj.requestTokenCallback(
-				error, 
-				requestTokenKey, 
-				requestTokenSecret, 
-				results);
+			'cache-control': 'no-cache',
+			'Accept': 'application/json',
+			'Authorization': 'Bearer ' + this.authenticator.accessToken() 
+		},
+		json: true,
+	};
+
+	if (method === 'GET')
+	{
+		options.qs = params;
+	}
+	else
+	{
+		options.body = params;
+	}
+
+	return new Promise(
+		function(resolve, reject) 
+		{
+			httpRequest(options)
+				.then(
+					function(body) 
+					{
+						console.log(body);
+						resolve(body);
+					})
+				.catch(
+					errors.StatusCodeError, 
+					function(reason) 
+					{
+						reject(reason.message);
+					})
 		});
 }
 
-Database.prototype.requestTokenCallback = function requestTokenCallback(
-	error, 
-	requestTokenKey, 
-	requestTokenSecret, 
-	results) 
+Database.prototype.getRequest = function(
+	url,
+	params)
 {
-	console.log("requestTokenCallback");
-	console.log(this);
-
-	if (error) 
+	var options = 
 	{
-		console.log('error: ' + JSON.stringify(error));
-	} 
-	else 
+		method: 'GET',
+		url: url,
+		qs: params,
+	};
+
+	return this.request('GET', url, params);
+}
+
+
+Database.prototype.postRequest = function(
+	url,
+	params)
+{
+	var options = 
 	{
-		console.log('requestTokenKey: ' + requestTokenKey);
-		console.log('requestTokenSecret: ' + requestTokenSecret);
-		console.log('results: ' + util.inspect(results));
-		console.log("Requesting access token");
-		console.log(
-			'Please go to ' 
-				+ this.authorizeUrl 
-				+ '?oauth_token=' 
-				+ encodeURIComponent(requestTokenKey));
+		method: 'POST',
+		url: url,
+		body: params,
+	};
 
-		var thisObj = this;
+	return this.request('POST', url, params);
+}
 
-		ask(
-			"Please enter the verification code:\n", 
-			/[\w\d]+/, 
-			function(data) 
+Database.prototype.deleteRequest = function(
+	url,
+	params)
+{
+	var options = 
+	{
+		method: 'DELETE',
+		url: url,
+		body: params,
+	};
+
+	return this.request('DELETE', url, params);
+}
+
+Database.prototype.getReadings = function(
+	params)
+{
+	var url = this.readingsUrl().replace('{projectId}', params.projectId);
+
+	if (typeof(params.projectId) === 'undefined')
+	{
+		return new Promise(
+			function(resolve, reject) 
 			{
-				thisObj.oauth.getOAuthAccessToken(
-					requestTokenKey, 
-					requestTokenSecret, 
-					data, 
-					function(
-						error, 
-						accessTokenKey, 
-						accessTokenSecret, 
-						results)
-					{
-						thisObj.accessTokenCallback(
-							error, 
-							accessTokenKey, 
-							accessTokenSecret, 
-							results);
-					});
+				var error = new Error();
+				error.message = 'Missing Project Id parameter';
+				reject(error);
 			});
 	}
-}
-
-Database.prototype.accessTokenCallback = function accessTokenCallback(
-	error, 
-	accessTokenKey, 
-	accessTokenSecret, 
-	results) 
-{
-	console.log("accessTokenCallback");
-	console.log(this);
-
-	if (error) 
-	{
-		console.log('error: ' + JSON.stringify(error));
-	} 
 	else 
 	{
-		console.log('accessTokenKey: ' + accessTokenKey);
-		console.log('accessTokenSecret: ' + accessTokenSecret);
-		console.log('access token results: ' + util.inspect(results));
-
-		this.accessTokenKey = accessTokenKey;
-		this.accessTokenSecret = accessTokenSecret;
+		return this.getRequest(url, params);
 	}
 }
 
-Database.prototype.get = function get(url)
-{
-	console.log("get");
-	console.log(this);
 
-	var request = this.oauth.get(
-		url, 
-		this.accessTokenKey, 
-		this.accessTokenSecret, 
-		function(error, data) 
-		{
-			if (error) 
+Database.prototype.postReadings = function(
+	params)
+{
+	var url = this.readingsUrl().replace('{projectId}', params.projectId);
+
+	if (typeof(params.projectId) === 'undefined')
+	{
+		return new Promise(
+			function(resolve, reject) 
 			{
-				console.log(error);
-			} 
-			else 
-			{
-				console.log(data);
-				var json = JSON.parse(data);
-				console.log(json);
-			}
-		});
+				var error = new Error();
+				error.message = 'Missing Project Id parameter';
+				reject(error);
+			});
+	}
+	else 
+	{
+		return this.postRequest(url, params);
+	}
 }
 
-
-function ask(
-	question, 
-	format, 
-	callback) 
+Database.prototype.deleteReadings = function()
 {
-	var stdin = process.stdin;
-	var stdout = process.stdout;
+	var url = this.readingsUrl().replace('{projectId}', params.projectId);
 
-	stdin.resume();
-	stdout.write(question);
+	var errorMessage = '';
 
-	stdin.once(
-		'data', 
-		function(data) 
-		{
-			data = data.toString().trim();
+	if (typeof(params.projectId) === "undefined")
+	{
+		errorMessage = 'Missing Project Id parameter';
+	}
 
-			if (format.test(data)) 
+	if (typeof(params.startTS) === "undefined")
+	{
+		errorMessage = 'Missing startTS parameter';
+	}
+
+	if (typeof(params.endTS) === "undefined")
+	{
+		errorMessage = 'Missing endTS parameter';
+	}
+	
+	if (errorMessage !== '')
+	{
+        return new Promise(
+			function(resolve, reject) 
 			{
-				callback(data);
-			} 
-			else 
-			{
-				stdout.write("It should match: "+ format +"\n");
-				ask(question, format, callback);
-			}
-		});
+				var error = new Error();
+				error.message = errorMessage;
+				reject(error);
+			});
+	}
+	else 
+	{
+		return this.deleteRequest(url, params);
+	}
 }
 
 exports.Database = Database;

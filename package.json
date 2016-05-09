@@ -2,7 +2,7 @@
   "name": "blitzen",
   "version": "0.0.0",
   "description": "Node.js interface for the Blitzen time series database.",
-  "main": "index.js",
+  "main": "blitzen.js",
   "scripts": {
     "test": "./node_modules/mocha/bin/mocha test"
   },
@@ -23,7 +23,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://git.autodesk.com/research-complex-systems/blitzen-nodejs.git"
+    "url": "https://git.autodesk.com/Data360/blitzen-nodejs.git"
   },
   "keywords": [
     "blitzen",
