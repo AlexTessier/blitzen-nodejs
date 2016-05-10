@@ -1,5 +1,6 @@
 var blitzen = require('./blitzen');
 var fs = require('fs');
+var os = require('os');
 
 readEntitiesFromFile = function(
 	entitiesFilePath)
@@ -47,10 +48,13 @@ readEntitiesFromFile = function(
 }
 
 
-var entitiesFilePath = '/Users/cameroj/.adsk-data360/entities-crucible.json';
+var entitiesFilePath = 
+	os.homedir() + '/.adsk-data360/entities-crucible.json';
+
 var entities = readEntitiesFromFile(entitiesFilePath);
 
-var credentialsFilePath = '/Users/cameroj/.adsk-data360/credentials-crucible.json'; 
+var credentialsFilePath = 
+	os.homedir() + '/.adsk-data360/credentials-crucible.json'; 
 
 var database = new blitzen.Database(credentialsFilePath);
 
