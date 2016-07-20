@@ -17,15 +17,16 @@ function Authenticator(
 	if (typeof(forgeUrl) === 'undefined') forgeUrl = DEFAULT_FORGE_URL;
 
 	this.credentialsFilePath = credentialsFilePath;
+	this.accessTokenFilePath = this.accessTokenFilePath(credentialsFilePath);
 	this.forgeUrl = forgeUrl;
 
     this._accessToken = null;
     this.credentials = {};
 	this.clientId = null;
 	this.clientSecret = null;
-//	this.automaticallyRefreshAccessToken = true;
 
 	this.readCredentialsFromFile(this.credentialsFilePath);
+	this.readAccessTokenFromFile(this.credentialsFilePath);
 }
 
 Authenticator.prototype.readCredentialsFromFile = function(
@@ -39,12 +40,13 @@ Authenticator.prototype.readCredentialsFromFile = function(
 		if (this.credentials.client_id && this.credentials.client_secret)
 		{
 			console.log(
-				'Successfully read credentials file => ClientID: ' 
-				+ this.credentials.client_id);
+				'Successfully read credentials file\n\tclient_id: ' 
+				+ this.credentials.client_id
+				+ "\n");
 		}
 		else
 		{
-			console.log('Error = > Invalid credentials file format');
+			console.log('Error: Invalid credentials file format');
 			console.log('Aborting !');
 			process.exit(1);
 		}
@@ -54,7 +56,7 @@ Authenticator.prototype.readCredentialsFromFile = function(
 		if (e.code === 'ENOENT') 
 		{
 			console.log(
-				'Error => Credentials file not found: ' 
+				'Error: Credentials file not found: ' 
 				+ this.credentialsFile);
 		} 
 		else 
@@ -67,11 +69,109 @@ Authenticator.prototype.readCredentialsFromFile = function(
 	}
 }
 
+
+Authenticator.prototype.accessTokenFilePath = function(
+	credentialsFilePath)
+{
+	// The name of the token file is based on the name of the credentials
+	// file.
+	
+	accessTokenFilePath = path.join(
+		path.dirname(credentialsFilePath),
+		'token.' + path.basename(credentialsFilePath));
+
+	return accessTokenFilePath;
+}
+
+Authenticator.prototype.readAccessTokenFromFile = function(
+	accessTokenFilePath)
+{
+	try 
+	{
+		var data = fs.readFileSync(this.accessTokenFilePath, 'utf8')
+		token = JSON.parse(data)
+
+		this._accessToken = new Token(
+			token.key,
+			token.endTime);
+
+		if (this._accessToken.key && this._accessToken.endTime)
+		{
+			console.log(
+				'Successfully read access token file\n\ttoken: ' 
+				+ this._accessToken.key);
+		}
+		else
+		{
+			console.log('Error: Invalid access token file format');
+			this._accessToken = null;
+		}
+	}
+	catch (e) 
+	{
+		if (e.code === 'ENOENT') 
+		{
+			console.log(
+				'Warning: access token file not found: ' 
+				+ this.accessTokenFilePath);
+		} 
+		else 
+		{
+			console.log("Error reading access token file: " + e.message);
+			// TODO: Delete the invalid access token file?
+		}
+	}
+}
+
+Authenticator.prototype.writeAccessTokenToFile = function(
+	accessTokenFilePath)
+{
+	console.log("writeAccessTokenToFile()");
+	return new Promise(
+		function(successFn, failureFn) 
+		{
+			fs.writeFile(
+				this.accessTokenFilePath, 
+				JSON.stringify(this._accessToken),
+				function(err) 
+				{
+					if (err) 
+					{
+						return failureFn(err);
+					}
+//					successFn(JSON.stringify(this._accessToken));
+					successFn();
+				});
+		});
+}
+
+Authenticator.prototype.parseToken = function(
+	response)
+{
+	console.log("parseToken() called");
+	this._accessToken = new Token(
+		response.access_token,
+		response.expires_in);
+	console.log(
+		'Fetched Token: ' 
+		+ JSON.stringify(this._accessToken));
+
+	this.writeAccessTokenToFile(this.accessTokenFilePath);
+
+	return new Promise(
+		function(successFn, failureFn) 
+		{
+			successFn();
+		});
+}
+
 // obtain access token
 // refresh access token
 // access token
 Authenticator.prototype.obtainAccessToken = function()
 {
+	console.log("obtainAccessToken()");
+
 	// This code does 2-legged OAuth 2
 	// It requires an OAuth 2 client id and client secret as input, 
 	// and produces a bearer token as output.
@@ -79,7 +179,7 @@ Authenticator.prototype.obtainAccessToken = function()
 	var thisObj = this;
 
 	return new Promise(
-		function(resolve, reject) 
+		function(successFn, failureFn) 
 		{
 			var options = 
 			{
@@ -99,37 +199,60 @@ Authenticator.prototype.obtainAccessToken = function()
 				json: true
 			};
 
+			console.log("calling httpRequest()");
 			httpRequest(options)
 				.then(
-					function(result) 
+					function(successResult) 
 					{
+						console.log("httpRequest() succeeded");
 						thisObj._accessToken = new Token(
-							result.access_token,
-							result.expires_in);
+							successResult.access_token,
+							successResult.expires_in);
 						console.log(
 							'Fetched Token: ' 
 							+ JSON.stringify(thisObj._accessToken));
-						resolve();
+						thisObj.writeAccessTokenToFile(thisObj.accessTokenFilePath)
+						.then(
+							function(dummyResult)
+							{
+								return successFn(successResult);
+							});
 					})
-				.catch(
-					function(err) 
+				/*	},
+					function(failureResult) 
 					{
-						console.log('Error Authenticating: ' + err);
+						console.log("httpRequest() failed");
+						console.log('Error Authenticating: ' + failureResult);
 						var error = new Error();
 						error.message = 
 							"Error Authenticating: " 
-							+ err.message;
-						reject(error);
+							+ failureResult.message;
+						failureFn(error);
+					});
+				*/
+				
+				.catch(
+					function(failureResult) 
+					{
+						console.log("httpRequest() failed");
+						console.log('Error Authenticating: ' + failureResult);
+						var error = new Error();
+						error.message = 
+							"Error Authenticating: " 
+							+ failureResult.message;
+						return failureFn(error);
 					})
+				
 		});
 }
 
 Authenticator.prototype.refreshAccessToken = function()
 {
+	console.log("refreshAccessToken()");
 	var thisObj = this;
 
 	return new Promise(
-		function(resolve, reject) 
+		function(successFn, failureFn) 
 		{
 			// if token is stale or expired or nonexistent, and we've been configured
 			// to automatically refresh tokens, then first refresh/obtain the token.
@@ -138,13 +261,12 @@ Authenticator.prototype.refreshAccessToken = function()
 				|| 	thisObj._accessToken.isExpired() 
 				|| 	thisObj._accessToken.isStale()) 
 			{
-				console.log('access token requires refreshing');
 				return thisObj.obtainAccessToken()
 			}
 			else
 			{
-				console.log('access token does not require refreshing');
-				resolve();
+				console.log("Existing access token appears to be valid.");
+				successFn();
 			}
 		});
 }
@@ -163,26 +285,34 @@ Authenticator.prototype.accessToken = function()
 
 
 // TODO: Derive from some OAuth token class?
-function Token(key, timeBeforeExpiryInSeconds)
+function Token(key, timeUntilEndInSeconds)
 {
 	this.key = key;
-	this.expiryTime = moment.utc().seconds(timeBeforeExpiryInSeconds);
+	this.startTime = moment.utc();
+	this.endTime = moment.utc().seconds(timeUntilEndInSeconds);
 }
 
 
 Token.prototype.isExpired = function()
 {
-	return (this.expiryTime < moment.utc());
+	return (this.endTime < moment.utc());
 }
 
 
 Token.prototype.isStale = function()
 {
-	var timeBeforeExpiryInMilliseconds = this.expiryTime - moment.utc();
-	var timeBeforeExpiryInSeconds = timeBeforeExpiryInMilliseconds / 1000;
+	var timeUntilEndInMilliseconds = this.endTime - moment.utc();
+	var timeUntilEndInSeconds = timeUntilEndInMilliseconds / 1000;
+	//var timeSinceStartInMilliseconds = moment.utc() - this.startTime;
+	//var timeSinceStartInSeconds = timeSinceStartInMilliseconds / 1000;
 
-	// If token will expire in less than 2 minutes, consider it stale
-	if (timeBeforeExpiryInSeconds <= 120)
+	// Define a length of time before expiry of the token during which the
+	// token should be considered stale and in need of refreshing.
+	const thresholdInMinutes = 3;
+	const thresholdInSeconds = thresholdInMinutes * 60;
+
+	// If token will expire in less than the threshold, consider it stale.
+	if (timeUntilEndInSeconds <= thresholdInSeconds)
 	{
 		return true;
 	}

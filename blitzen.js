@@ -1,9 +1,10 @@
 var errors = require('request-promise/errors');
-var httpRequest = require('request-promise');
-var Promise = require("bluebird");
 var fs = require('fs');
+var httpRequest = require('request-promise');
 var oxygen = require('./oxygen');
 var path = require('path');
+var Promise = require("bluebird");
+var util = require('util');
 
 //TODO: Create this library as a npm module ? (TBD)
 
@@ -44,20 +45,14 @@ Database.prototype.readingsUrl = function()
 	return (this.apiUrl + V1_SIMPLE_READINGS_ENDPOINT);
 }
 
-Database.prototype.connect = function()
-{
-	console.log('Database.connect() called');
 
-	return this.authenticator.obtainAccessToken();
-}
-
-Database.prototype.request = function(
+Database.prototype.tryRequest = function(
 	method, 
 	url,
 	params)
 {
 	console.log('\n' + method + ": " + url);
-	
+
 	var options = 
 	{
 		method: method,
@@ -71,6 +66,8 @@ Database.prototype.request = function(
 		json: true,
 	};
 
+	console.log("token: " + this.authenticator.accessToken());
+
 	if (method === 'GET')
 	{
 		options.qs = params;
@@ -81,22 +78,92 @@ Database.prototype.request = function(
 	}
 
 	return new Promise(
-		function(resolve, reject) 
+		function(successFn, failureFn) 
 		{
 			httpRequest(options)
 				.then(
-					function(body) 
+					function(successResult) 
 					{
-						console.log(body);
-						resolve(body);
+						console.log(method + ' request succeeded.');
+						console.log(successResult);
+						successFn(successResult);
+					},
+					function(failureResult) 
+					{
+						console.log(
+							method 
+							+ ' request failed: ' 
+							+ failureResult.response.statusCode
+							+ " ("
+							+ failureResult.response.statusMessage
+							+ "): "
+							+ failureResult.response.body);
+						failureFn(failureResult);
 					})
 				.catch(
 					errors.StatusCodeError, 
-					function(reason) 
+					function(failureResult) 
 					{
-						reject(reason.message);
+						failureFn(failureResult);
 					})
 		});
+}
+	
+Database.prototype.retryRequest = function(
+	method,
+	url,
+	params)
+{
+	var thisObj = this;
+
+	this.authenticator.obtainAccessToken()
+	.then(
+		function(successResult)
+		{
+			return thisObj.tryRequest(method, url, params);
+		},
+		function(failureResult)
+		{
+		});
+}
+	
+Database.prototype.request = function(
+	method, 
+	url,
+	params)
+{
+	console.log("request()");
+	var thisObj = this;
+
+	this.authenticator.refreshAccessToken()
+	.then(
+		thisObj.tryRequest(method, url, params)
+		.then(
+			function successFn(successResult)
+			{
+				return new Promise(
+					function(successFn, failureFn) 
+					{
+						successFn(successResult);
+					});
+			},
+			function(failureResult)
+			{
+				if (failureResult.response.statusMessage == 'Unauthorized')
+				{
+					console.log('Attempting to obtain new access token.');
+					return thisObj.retryRequest(method, url, params);
+				}
+				else
+				{
+					return new Promise(
+						function(successFn, failureFn) 
+						{
+							failureFn(failureResult);
+						});
+				}
+			})
+		);
 }
 
 Database.prototype.getRequest = function(
@@ -150,11 +217,11 @@ Database.prototype.getReadings = function(
 	if (typeof(params.projectId) === 'undefined')
 	{
 		return new Promise(
-			function(resolve, reject) 
+			function(successFn, failureFn) 
 			{
 				var error = new Error();
 				error.message = 'Missing Project Id parameter';
-				reject(error);
+				failureFn(error);
 			});
 	}
 	else 
@@ -172,11 +239,11 @@ Database.prototype.postReadings = function(
 	if (typeof(params.projectId) === 'undefined')
 	{
 		return new Promise(
-			function(resolve, reject) 
+			function(successFn, failureFn) 
 			{
 				var error = new Error();
 				error.message = 'Missing Project Id parameter';
-				reject(error);
+				failureFn(error);
 			});
 	}
 	else 
@@ -209,11 +276,11 @@ Database.prototype.deleteReadings = function()
 	if (errorMessage !== '')
 	{
         return new Promise(
-			function(resolve, reject) 
+			function(successFn, failureFn) 
 			{
 				var error = new Error();
 				error.message = errorMessage;
-				reject(error);
+				failureFn(error);
 			});
 	}
 	else 
