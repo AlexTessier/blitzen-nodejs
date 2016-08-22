@@ -5,6 +5,7 @@ var oxygen = require('./oxygen');
 var path = require('path');
 var Promise = require("bluebird");
 var util = require('util');
+const assert = require('assert');
 
 //TODO: Create this library as a npm module ? (TBD)
 
@@ -77,36 +78,49 @@ Database.prototype.tryRequest = function(
 		options.body = params;
 	}
 
-	return new Promise(
+	resultPromise =  httpRequest(options);
+	assert(resultPromise);
+	return resultPromise;
+	/*
+	returnValue = new Promise(
 		function(successFn, failureFn) 
 		{
-			httpRequest(options)
-				.then(
-					function(successResult) 
-					{
-						console.log(method + ' request succeeded.');
-						console.log(successResult);
-						successFn(successResult);
-					},
-					function(failureResult) 
-					{
-						console.log(
-							method 
-							+ ' request failed: ' 
-							+ failureResult.response.statusCode
-							+ " ("
-							+ failureResult.response.statusMessage
-							+ "): "
-							+ failureResult.response.body);
-						failureFn(failureResult);
-					})
-				.catch(
-					errors.StatusCodeError, 
-					function(failureResult) 
-					{
-						failureFn(failureResult);
-					})
+			console.log("executing httpRequest");
+
+			resultPromise = httpRequest(options);
+			assert(resultPromise);
+			console.log("waiting on httpRequest result");
+			resultPromise.then(
+				function(successResult) 
+				{
+					console.log(method + ' request succeeded.');
+					console.log(successResult);
+					successFn(successResult);
+				},
+				function(failureResult) 
+				{
+					console.log(
+						method 
+						+ ' request failed: ' 
+						+ failureResult.response.statusCode
+						+ " ("
+						+ failureResult.response.statusMessage
+						+ "): "
+						+ failureResult.response.body);
+					failureFn(failureResult);
+				})
+			.catch(
+				errors.StatusCodeError, 
+				function(failureResult) 
+				{
+					console.log("request exeception");
+					failureFn(failureResult);
+				});
 		});
+
+	assert(returnValue);
+	return returnValue;
+	*/
 }
 	
 Database.prototype.retryRequest = function(
@@ -116,7 +130,7 @@ Database.prototype.retryRequest = function(
 {
 	var thisObj = this;
 
-	this.authenticator.obtainAccessToken()
+	return this.authenticator.obtainAccessToken()
 	.then(
 		function(successResult)
 		{
@@ -127,6 +141,12 @@ Database.prototype.retryRequest = function(
 		});
 }
 	
+Database.prototype.onRequestSuccess(
+	serverResponse)
+{
+	return serverResponse;
+}
+
 Database.prototype.request = function(
 	method, 
 	url,
@@ -135,35 +155,60 @@ Database.prototype.request = function(
 	console.log("request()");
 	var thisObj = this;
 
+	/*
+	
 	this.authenticator.refreshAccessToken()
-	.then(
-		thisObj.tryRequest(method, url, params)
-		.then(
-			function successFn(successResult)
-			{
-				return new Promise(
-					function(successFn, failureFn) 
+	.then(thisObj.tryRequest(method, url, params)
+	.catch(
+	 */ 
+//	return 
+//		this.authenticator.refreshAccessToken()
+//		.then(
+			resultPromise = this.tryRequest(method, url, params);
+			assert(resultPromise);
+			return resultPromise
+			.then(
+				function successFn(successResult) // move to Database.prototype.onRequestSuccess()?
+				{
+					return successResult;
+//					promise = new Promise(
+//						function(successFn, failureFn) 
+//						{
+//							successFn(successResult);
+//						});
+//					assert(promise);
+//					return promise;
+				},
+				function failureFn(failureResult) // move to Database.prototype.onRequestFailure()?
+				{
+					if (failureResult.response.statusMessage == 'Unauthorized')
 					{
-						successFn(successResult);
-					});
-			},
-			function(failureResult)
-			{
-				if (failureResult.response.statusMessage == 'Unauthorized')
-				{
-					console.log('Attempting to obtain new access token.');
-					return thisObj.retryRequest(method, url, params);
-				}
-				else
-				{
-					return new Promise(
-						function(successFn, failureFn) 
-						{
-							failureFn(failureResult);
-						});
-				}
-			})
-		);
+						console.log('Data360 API request was unauthorized.');
+						console.log('Attempting to obtain new access token.');
+						promise = thisObj.retryRequest(method, url, params);
+						assert(promise);
+						return promise;
+					}
+					else
+					{
+						return failureResult;
+//						console.log("failure blitzen.js:170");
+//						promise = new Promise(
+//							function(successFn, failureFn) 
+//							{
+//								failureFn(failureResult);
+//							});
+//						assert(promise);
+//						return promise;
+					}
+				});
+//			.catch(
+//				function(errorResult) 
+//				{
+//					console.log("request exeception");
+//					failureFn(failureResult);
+//				});
+//			);
 }
 
 Database.prototype.getRequest = function(
@@ -192,7 +237,11 @@ Database.prototype.postRequest = function(
 		body: params,
 	};
 
-	return this.request('POST', url, params);
+	resultPromise = this.request('POST', url, params);
+
+	assert(resultPromise); 
+	return resultPromise;
+//	return this.request('POST', url, params);
 }
 
 Database.prototype.deleteRequest = function(

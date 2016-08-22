@@ -1,6 +1,8 @@
 var blitzen = require('./blitzen');
 var fs = require('fs');
 var os = require('os');
+//var async = require('asyncawait/async');
+//var await = require('asyncawait/await');
 
 readEntitiesFromFile = function(
 	entitiesFilePath)
@@ -58,35 +60,30 @@ var credentialsFilePath =
 
 var database = new blitzen.Database(credentialsFilePath);
 
-database.connect()
-.then(
-	function(result)
-	{
-		//Add 2 data points with randomly selected values
-		var params = 
+//Add 2 data points with randomly selected values
+var params = 
+{
+	organizationId: entities.organization_id,
+	groupId: entities.group_id,
+	projectId: entities.project_id,
+	readingList: 
+	[
 		{
-			organizationId: entities.organization_id,
-			groupId: entities.group_id,
-			projectId: entities.project_id,
-			readingList: 
-			[
-				{
-					sensorId: 'exampleSensorId',
-					ts: new Date().toISOString(),
-					val: Math.random()
-				},
-				{
-					sensorId: 'exampleSensorId',
-					ts: new Date().toISOString(),
-					val: Math.random()
-				}
-			]
+			sensorId: 'exampleSensorId',
+			ts: new Date().toISOString(),
+			val: Math.random()
+		},
+		{
+			sensorId: 'exampleSensorId',
+			ts: new Date().toISOString(),
+			val: Math.random()
 		}
+	]
+}
 
-		// By not returning the Promise returned from postReadings(), we allow
-		// the app to proceed into the following .then() immediately.
-		database.postReadings(params);
-	})
+// By not returning the Promise returned from postReadings(), we allow
+// the app to proceed into the following .then() immediately.
+database.postReadings(params)
 .then(
 	function(result)
 	{

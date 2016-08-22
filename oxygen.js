@@ -217,8 +217,8 @@ Authenticator.prototype.obtainAccessToken = function()
 							{
 								return successFn(successResult);
 							});
-					})
-				/*	},
+			//		})
+					},
 					function(failureResult) 
 					{
 						console.log("httpRequest() failed");
@@ -229,8 +229,8 @@ Authenticator.prototype.obtainAccessToken = function()
 							+ failureResult.message;
 						failureFn(error);
 					});
-				*/
 				
+			/*	
 				.catch(
 					function(failureResult) 
 					{
@@ -242,8 +242,17 @@ Authenticator.prototype.obtainAccessToken = function()
 							+ failureResult.message;
 						return failureFn(error);
 					})
-				
+			*/	
 		});
+}
+
+Authenticator.prototype.accessTokenAppearsValid = function()
+{
+	return 
+		!(		thisObj._accessToken === undefined 
+			||	thisObj._accessToken === null
+			|| 	thisObj._accessToken.isExpired() 
+			|| 	thisObj._accessToken.isStale()); 
 }
 
 Authenticator.prototype.refreshAccessToken = function()
