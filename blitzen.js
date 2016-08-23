@@ -12,6 +12,96 @@ const assert = require('assert');
 const DEFAULT_API_URL = 'https://projectdasher-staging.api.autodesk.com';
 const V1_SIMPLE_READINGS_ENDPOINT = '/api/v1/projects/{projectId}/readings';
 
+function Request(
+	method,
+	url, 
+	params,
+	database)
+{
+	assert(database);
+
+	this.method = method;
+	this.url = url;
+	this.params = params;
+	this.database = database;
+	this.accessTokenRefreshed = false;
+}
+
+Request.prototype.onSuccess = function(
+	serverResponse)
+{
+	return serverResponse;
+}
+
+Request.prototype.onFailure = function(
+	serverResponse)
+{
+//	console.log("Request::onFailure");
+
+	if (	(serverResponse.response.statusMessage == 'Unauthorized')
+		&&	(!this.accessTokenRefreshed))
+	{
+		console.log('Data360 API request was unauthorized.');
+		console.log('Attempting to obtain new access token.');
+
+		var thisObj = this;
+
+		return this.database.authenticator.obtainAccessToken()
+		.then(
+			function() {return thisObj.send()})
+		.then(
+			function(successResult) {return thisObj.onSuccess(successResult)}, 
+			function(failureResult) {return thisObj.onFailure(failureResult)});
+	}
+	else
+	{
+		return serverResponse;
+	}
+}
+
+Request.prototype.refreshAccessToken = function()
+{
+	this.accessTokenRefreshed = true;
+	return this.database.authenticator.obtainAccessToken()
+}
+
+Request.prototype.send = function()
+{
+	console.log('\n' + this.method + ": " + this.url);
+
+	var options = 
+	{
+		method: this.method,
+		url: this.url,
+		headers:
+		{
+			'cache-control': 'no-cache',
+			'Accept': 'application/json',
+			'Authorization': 'Bearer ' 
+				+ this.database.authenticator.accessToken() 
+		},
+		json: true,
+	};
+
+	console.log("token: " + this.database.authenticator.accessToken());
+
+	if (this.method === 'GET')
+	{
+		options.qs = this.params;
+	}
+	else
+	{
+		options.body = this.params;
+	}
+
+	var thisObj = this;
+
+	return httpRequest(options)
+	.then(
+		function(successResult) {return thisObj.onSuccess(successResult)}, 
+		function(failureResult) {return thisObj.onFailure(failureResult)});
+}
+
 function Database(
 	credentialsFilePath,
 	apiUrl)
@@ -141,10 +231,34 @@ Database.prototype.retryRequest = function(
 		});
 }
 	
-Database.prototype.onRequestSuccess(
+Database.prototype.onRequestSuccess = function(
 	serverResponse)
 {
+	console.log("request succeeded");
+//	console.log(serverResponse);
 	return serverResponse;
+}
+
+Database.prototype.onRequestFailure = function(
+	method,
+	url,
+	params,
+	serverResponse)
+{
+	console.log("request failure");
+
+	if (failureResult.response.statusMessage == 'Unauthorized')
+	{
+		console.log('Data360 API request was unauthorized.');
+		console.log('Attempting to obtain new access token.');
+		promise = thisObj.retryRequest(method, url, params);
+		assert(promise);
+		return promise;
+	}
+	else
+	{
+		return failureResult;
+	}
 }
 
 Database.prototype.request = function(
@@ -152,63 +266,34 @@ Database.prototype.request = function(
 	url,
 	params)
 {
-	console.log("request()");
+//	console.log("request()");
 	var thisObj = this;
 
-	/*
-	
-	this.authenticator.refreshAccessToken()
-	.then(thisObj.tryRequest(method, url, params)
-	.catch(
-	 */ 
-//	return 
-//		this.authenticator.refreshAccessToken()
-//		.then(
-			resultPromise = this.tryRequest(method, url, params);
-			assert(resultPromise);
-			return resultPromise
-			.then(
-				function successFn(successResult) // move to Database.prototype.onRequestSuccess()?
-				{
-					return successResult;
-//					promise = new Promise(
-//						function(successFn, failureFn) 
-//						{
-//							successFn(successResult);
-//						});
-//					assert(promise);
-//					return promise;
-				},
-				function failureFn(failureResult) // move to Database.prototype.onRequestFailure()?
-				{
-					if (failureResult.response.statusMessage == 'Unauthorized')
-					{
-						console.log('Data360 API request was unauthorized.');
-						console.log('Attempting to obtain new access token.');
-						promise = thisObj.retryRequest(method, url, params);
-						assert(promise);
-						return promise;
-					}
-					else
-					{
-						return failureResult;
-//						console.log("failure blitzen.js:170");
-//						promise = new Promise(
-//							function(successFn, failureFn) 
-//							{
-//								failureFn(failureResult);
-//							});
-//						assert(promise);
-//						return promise;
-					}
-				});
-//			.catch(
-//				function(errorResult) 
-//				{
-//					console.log("request exeception");
-//					failureFn(failureResult);
-//				});
-//			);
+	var request = new Request(method, url, params, this);
+
+	return request.send();
+/*
+	resultPromise = this.tryRequest(method, url, params);
+	assert(resultPromise);
+	return resultPromise
+	.then(
+		this.onRequestSuccess,
+		function failureFn(failureResult) // move to Database.prototype.onRequestFailure()?
+		{
+			if (failureResult.response.statusMessage == 'Unauthorized')
+			{
+				console.log('Data360 API request was unauthorized.');
+				console.log('Attempting to obtain new access token.');
+				promise = thisObj.retryRequest(method, url, params);
+				assert(promise);
+				return promise;
+			}
+			else
+			{
+				return failureResult;
+			}
+		});
+*/
 }
 
 Database.prototype.getRequest = function(
