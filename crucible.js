@@ -17,10 +17,15 @@ readEntitiesFromFile = function(
 			&& 	entities.group_id
 			&&	entities.project_id)
 		{
-			console.log('Successfully read entities.'); 
-			console.log("organization_id: " + entities.organization_id);
-			console.log("group_id: " + entities.group_id);
-			console.log("project_id: " + entities.project_id);
+			console.log(
+				"Successfully read entities."
+				+ "\n\torganization_id: " 
+				+ entities.organization_id
+				+ "\n\tgroup_id: " 
+				+ entities.group_id
+				+ "\n\tproject_id: " 
+				+ entities.project_id
+				+ "\n");
 		}
 		else
 		{
