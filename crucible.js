@@ -1,8 +1,6 @@
 var blitzen = require('./blitzen');
 var fs = require('fs');
 var os = require('os');
-//var async = require('asyncawait/async');
-//var await = require('asyncawait/await');
 
 readEntitiesFromFile = function(
 	entitiesFilePath)
