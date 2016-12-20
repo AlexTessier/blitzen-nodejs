@@ -39,10 +39,29 @@ Authenticator.prototype.readCredentialsFromFile = function(
 
 		if (this.credentials.client_id && this.credentials.client_secret)
 		{
-			console.log(
-				'Successfully read credentials file\n\tclient_id: ' 
-				+ this.credentials.client_id
-				+ "\n");
+			if (!this.credentials.scope)
+			{
+				console.log(
+					"Warning: Credentials file ("
+					+ credentialsFilePath
+					+ ") does not specify OAuth token scope.");
+				console.log(
+					"Scope will default to \"data:read, data:write\".");
+				this.credentials.scope = "data:read, data:write";
+
+				console.log(
+					"To suppress this warning in the future, add a line to "
+					+ "the credentials file specifying scope, like this:\n"
+					+ "\n\tscope: \"data:read, data:write\"\n");
+			}
+			else
+			{
+				console.log(
+					'Successfully read credentials file\n\tclient_id: ' 
+					+ this.credentials.client_id
+					+ "\n");
+			}
+
 		}
 		else
 		{
@@ -186,7 +205,8 @@ Authenticator.prototype.obtainAccessToken = function()
 		{
 			client_id: thisObj.credentials.client_id,
 			client_secret: thisObj.credentials.client_secret,
-			grant_type: 'client_credentials'
+			grant_type: 'client_credentials',
+			scope: thisObj.credentials.scope
 		},
 		json: true
 	};
